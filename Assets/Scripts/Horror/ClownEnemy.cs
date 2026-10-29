@@ -16,6 +16,10 @@ namespace SgiVr.Horror
         public float attackCooldown = 1.8f;
         [Tooltip("Segundos desde que empieza el ataque hasta que golpea.")]
         public float attackHitDelay = 0.5f;
+        [Tooltip("Segundos que se queda en el suelo antes de levantarse otra vez.")]
+        public float reviveTime = 20f;
+        [Tooltip("Segundos que tarda en ponerse de pie.")]
+        public float getUpTime = 1.2f;
 
         [Header("Movimiento")]
         public float walkSpeed = 1.0f;
@@ -39,7 +43,9 @@ namespace SgiVr.Horror
         public string deathState = "death";
         public string rageState = "rage";
 
-        enum State { Patrol, Rage, Chase, Attack, Hit, Dead }
+        enum State { Patrol, Rage, Chase, Attack, Hit, Dead, GettingUp }
+
+        int maxHealth;
 
         State state = State.Patrol;
         CharacterController controller;
@@ -66,6 +72,7 @@ namespace SgiVr.Horror
             animator = GetComponentInChildren<Animator>();
             if (animator) animator.applyRootMotion = false;
             house = HouseLayout.Find();
+            maxHealth = Mathf.Max(1, health);
             lastPosition = transform.position;
             PickPatrolTarget();
         }
@@ -74,7 +81,11 @@ namespace SgiVr.Horror
 
         void Update()
         {
-            if (state == State.Dead) return;
+            if (state == State.Dead)
+            {
+                UpdateDead();
+                return;
+            }
 
             movedThisFrame = false;
             Transform player = Player;
@@ -143,12 +154,71 @@ namespace SgiVr.Horror
                     break;
 
                 case State.Hit:
-                    if (stateTimer <= 0f) state = State.Chase;
+                    // El Animator de la demo enlaza "hit" con "death": si ya terminó el golpe, sigue persiguiendo.
+                    if (stateTimer <= 0f || !IsPlaying(hitState)) state = State.Chase;
+                    break;
+
+                case State.GettingUp:
+                    if (stateTimer <= 0f)
+                    {
+                        // Se levanta furioso y va a por ti.
+                        state = State.Rage;
+                        stateTimer = 1.3f;
+                        PlayAnim(rageState, true);
+                    }
                     break;
             }
 
             // Aplica la gravedad aunque esté quieto.
             if (!movedThisFrame && controller.enabled) controller.SimpleMove(Vector3.zero);
+        }
+
+        /// <summary>
+        /// Tumbado en el suelo: congela la última pose de la muerte (el Animator de la demo
+        /// intentaría pasar a otras animaciones) y, pasado reviveTime, se levanta.
+        /// </summary>
+        void UpdateDead()
+        {
+            stateTimer -= Time.deltaTime;
+
+            // Se deja un momento para que el Animator empiece la caída antes de vigilarla.
+            if (animator && animator.speed > 0f && stateTimer < reviveTime - 0.3f)
+            {
+                int deathHash = Animator.StringToHash(deathState);
+                bool inTransition = animator.IsInTransition(0);
+                AnimatorStateInfo current = animator.GetCurrentAnimatorStateInfo(0);
+                bool enteringDeath = inTransition && animator.GetNextAnimatorStateInfo(0).shortNameHash == deathHash;
+                bool stillFalling = !inTransition && current.shortNameHash == deathHash && current.normalizedTime < 0.97f;
+
+                // Ha terminado de caer (o el Animator intenta pasar a otra animación): congela la pose final.
+                if (!enteringDeath && !stillFalling)
+                {
+                    animator.Play(deathHash, 0, 1f);
+                    animator.Update(0f);
+                    animator.speed = 0f;
+                }
+            }
+
+            if (stateTimer > 0f) return;
+
+            // Se levanta: la mezcla larga hacia "idle" hace que pase de tumbado a de pie.
+            if (animator) animator.speed = 1f;
+            health = maxHealth;
+            controller.enabled = true;
+            state = State.GettingUp;
+            stateTimer = getUpTime;
+            if (animator && animator.HasState(0, Animator.StringToHash(idleState)))
+                animator.CrossFadeInFixedTime(idleState, getUpTime, 0);
+            currentAnim = idleState;
+            path.Clear();
+        }
+
+        bool IsPlaying(string stateName)
+        {
+            if (!animator) return false;
+            int hash = Animator.StringToHash(stateName);
+            if (animator.IsInTransition(0) && animator.GetNextAnimatorStateInfo(0).shortNameHash == hash) return true;
+            return animator.GetCurrentAnimatorStateInfo(0).shortNameHash == hash;
         }
 
         bool CanSense(Transform player, float dist)
@@ -272,6 +342,8 @@ namespace SgiVr.Horror
             if (health <= 0)
             {
                 state = State.Dead;
+                stateTimer = reviveTime;
+                if (animator) animator.speed = 1f;
                 PlayAnim(deathState, true);
                 controller.enabled = false;
                 return;
