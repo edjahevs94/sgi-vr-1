@@ -4,19 +4,15 @@ using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
 namespace SgiVr.Horror
 {
-    /// <summary>
-    /// Pistola: cógela con el grip y dispara con el gatillo. Muestra un láser mientras la sujetas.
-    /// El cañón se calcula a partir del eje más largo del modelo; si el láser sale hacia atrás,
-    /// marca "Invertir cañón" en el Inspector.
-    /// </summary>
     [RequireComponent(typeof(XRGrabInteractable))]
     public class PistolGun : MonoBehaviour
     {
         public enum BarrelAxis { Automatico, X, Y, Z }
 
         [Header("Dirección del cañón")]
+        [Tooltip("Objeto vacío en la punta del cañón con su eje Z (azul) apuntando hacia delante. Recomendado.")]
+        public Transform puntoCanon;   // NUEVO
         public BarrelAxis ejeCanon = BarrelAxis.Automatico;
-        [Tooltip("Marca esta casilla si el láser sale por la parte de atrás de la pistola.")]
         public bool invertirCanon;
 
         [Header("Disparo")]
@@ -65,20 +61,20 @@ namespace SgiVr.Horror
             }
         }
 
-        void OnEnable()
-        {
-            grab.activated.AddListener(OnActivated);
-        }
-
-        void OnDisable()
-        {
-            grab.activated.RemoveListener(OnActivated);
-        }
-
+        void OnEnable() => grab.activated.AddListener(OnActivated);
+        void OnDisable() => grab.activated.RemoveListener(OnActivated);
         void OnActivated(ActivateEventArgs args) => Shoot();
 
         void GetMuzzle(out Vector3 position, out Vector3 direction)
         {
+            // NUEVO: si hay punto de cañón, se usa directamente
+            if (puntoCanon != null)
+            {
+                position = puntoCanon.position;
+                direction = (invertirCanon ? -puntoCanon.forward : puntoCanon.forward).normalized;
+                return;
+            }
+
             Vector3 size = localBounds.size;
             int axis;
             switch (ejeCanon)
@@ -95,6 +91,21 @@ namespace SgiVr.Horror
             direction = transform.TransformDirection(localDir).normalized;
         }
 
+        // NUEVO: raycast que ignora los colliders de la propia pistola
+        bool CastRay(Vector3 origin, Vector3 dir, out RaycastHit best)
+        {
+            best = default;
+            var hits = Physics.RaycastAll(origin, dir, range, ~0, QueryTriggerInteraction.Ignore);
+            float min = float.MaxValue;
+            bool found = false;
+            foreach (var h in hits)
+            {
+                if (h.collider.transform.IsChildOf(transform)) continue;
+                if (h.distance < min) { min = h.distance; best = h; found = true; }
+            }
+            return found;
+        }
+
         public void Shoot()
         {
             if (Time.time - lastShotTime < fireCooldown) return;
@@ -105,7 +116,7 @@ namespace SgiVr.Horror
             muzzleFlash.enabled = true;
             flashTimer = 0.06f;
 
-            if (Physics.Raycast(origin, dir, out RaycastHit hit, range, ~0, QueryTriggerInteraction.Ignore))
+            if (CastRay(origin, dir, out RaycastHit hit))
             {
                 var target = hit.collider.GetComponentInParent<IDamageable>();
                 if (target != null) target.TakeDamage(damage, hit.point);
@@ -124,12 +135,21 @@ namespace SgiVr.Horror
             bool on = showLaser && grab.isSelected;
             laser.enabled = on;
             if (!on) return;
+
             GetMuzzle(out Vector3 origin, out Vector3 dir);
-            Vector3 end = Physics.Raycast(origin, dir, out RaycastHit hit, range, ~0, QueryTriggerInteraction.Ignore)
-                ? hit.point
-                : origin + dir * range;
+            Vector3 end = CastRay(origin, dir, out RaycastHit hit) ? hit.point : origin + dir * range;
             laser.SetPosition(0, origin);
             laser.SetPosition(1, end);
+        }
+
+        // NUEVO: línea en la Scene view para ver hacia dónde apunta el cañón
+        void OnDrawGizmosSelected()
+        {
+            if (puntoCanon == null) return;
+            Gizmos.color = Color.red;
+            Vector3 d = invertirCanon ? -puntoCanon.forward : puntoCanon.forward;
+            Gizmos.DrawRay(puntoCanon.position, d * 0.3f);
+            Gizmos.DrawSphere(puntoCanon.position, 0.005f);
         }
     }
 }
