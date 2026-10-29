@@ -47,6 +47,18 @@ namespace SgiVr.Horror
 
         int maxHealth;
 
+        // Datos para el HUD.
+        public int Health => Mathf.Max(0, health);
+        public int MaxHealth => Mathf.Max(1, maxHealth > 0 ? maxHealth : health);
+        public bool IsDown => state == State.Dead;
+        public float SecondsToRevive => IsDown ? Mathf.Max(0f, stateTimer) : 0f;
+        public float ReviveProgress => IsDown ? 1f - Mathf.Clamp01(stateTimer / Mathf.Max(0.01f, reviveTime)) : 1f;
+
+        void Awake()
+        {
+            maxHealth = Mathf.Max(1, health);
+        }
+
         State state = State.Patrol;
         CharacterController controller;
         Animator animator;
@@ -72,7 +84,6 @@ namespace SgiVr.Horror
             animator = GetComponentInChildren<Animator>();
             if (animator) animator.applyRootMotion = false;
             house = HouseLayout.Find();
-            maxHealth = Mathf.Max(1, health);
             lastPosition = transform.position;
             PickPatrolTarget();
         }

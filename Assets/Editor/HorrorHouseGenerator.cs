@@ -54,6 +54,8 @@ namespace SgiVr.Horror.EditorTools
                 Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
                 var builder = new Builder(flashlightPrefab);
                 builder.Build();
+                PlayerHealth playerHealth = Object.FindAnyObjectByType<PlayerHealth>();
+                if (playerHealth) HorrorHUDBuilder.AddTo(playerHealth);
 
                 EditorUtility.DisplayProgressBar("Casa de terror", "Guardando escena...", 0.9f);
                 EditorSceneManager.SaveScene(scene, ScenePath);

@@ -43,6 +43,14 @@ El usuario eligió: **casa de terror**, **6-8 habitaciones**.
 - Oscuridad total: sin luces, sin luz ambiental ni reflejos; la única luz es la linterna.
 - Linterna y pistola llevan un contorno amarillo que late (`GlowOutline` + shader, grosor en píxeles de pantalla, `Assets/Horror/Shaders/Outline.shader`,
   material `Assets/Horror/Materials/Contorno.mat`); se oculta al cogerlas. Grosor/color/pulso editables en el Inspector.
+- El usuario edita `CasaTerror.unity` a mano: **no regenerar la escena**; los cambios nuevos se hacen en los scripts de juego.
+- HUD tradicional (lo pidió el usuario): objeto `HUD` guardado en la escena dentro de Main Camera (Canvas World Space +
+  Images Filled + TextMeshPro) con `HorrorHUD`, que solo actualiza fillAmount y textos (en Awake pone ZTest Always).
+  Se añade con el menú **SGI VR > Añadir HUD a la escena abierta** (`Assets/Editor/HorrorHUDBuilder.cs`, también lo
+  llama el generador), que además pone `FlashlightBattery` en la linterna. Nada se crea por código al pulsar Play.
+  Pila: solo gasta encendida, no se recarga.
+- El payaso, al morir, congela la pose de `death` (el Animator de la demo encadena todas las animaciones),
+  espera `reviveTime` (20 s) y se levanta con la vida completa.
 - Linterna: se copia en cada generación la ya configurada en `SampleScene` a `Assets/Horror/Prefabs/Linterna_VR.prefab`,
   quitando antes los scripts perdidos (tenía un componente de luz HDRP roto que impedía guardar el prefab y hacía que se
   usara una linterna de repuesto sin AttachPoint → el agarre con G no la llevaba a la mano).
