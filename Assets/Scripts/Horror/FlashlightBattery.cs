@@ -18,10 +18,12 @@ namespace SgiVr.Horror
         public float flickerBelow = 10f;
 
         public static FlashlightBattery Instance { get; private set; }
+        [Tooltip("1 = velocidad normal, 0 = no gasta, 2 = el doble de rápido")]
+        public float drainMultiplier = 1f;
 
         /// <summary>Pila restante, de 0 a 100.</summary>
-        public float Percent { get; private set; } = 100f;
-        public bool IsOn { get; private set; }
+        public float Percent { get;  set; } = 100f;
+        public bool IsOn { get; set; }
 
         Light[] lights;
         float[] baseIntensity;
@@ -41,6 +43,11 @@ namespace SgiVr.Horror
             if (Instance == this) Instance = null;
         }
 
+        public void Recharge(float amount)
+        {
+            Percent = Mathf.Clamp(Percent + amount, 0f, 100f);
+        }
+
         // LateUpdate: va después de que el botón encienda o apague la luz en el mismo frame.
         void LateUpdate()
         {
@@ -50,7 +57,7 @@ namespace SgiVr.Horror
 
             if (IsOn)
             {
-                Percent = Mathf.Max(0f, Percent - drainPerSecond * Time.deltaTime);
+                Percent = Mathf.Max(0f, Percent - drainPerSecond * drainMultiplier * Time.deltaTime);
                 if (Percent <= 0f)
                 {
                     foreach (Light l in lights) if (l) l.enabled = false;
